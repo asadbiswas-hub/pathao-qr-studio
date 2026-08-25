@@ -1,774 +1,207 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Pathao Courier - Secure Code Studio | By Asad Biswas</title>
-  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <style>
-    :root {
-      --pathao-red: #E2136E;
-      --pathao-dark: #1E293B;
-      --pathao-hover: #C10C59;
-      --bg-gray: #F8FAFC;
-      --card-bg: #FFFFFF;
-      --border-color: #E2E8F0;
-      --text-muted: #64748B;
-      --success-green: #10B981;
-      --error-red: #EF4444;
+<script>
+  // Replace this with your Google Apps Script Web App URL
+  const API_URL = https://script.google.com/a/macros/pathao.com/s/AKfycbwZhbLsOOchkrbOmlXGQE8LMR5h0Xx5ndOz9_Vh8XB6rQVzLU7-lQ6GpDn8t_h4GDUVVw/exec;
+
+  let employeeDatabase = [];
+  let activeUser = null;
+
+  // Fetch live employee database from Google Sheets
+  async function fetchEmployeesFromSheet() {
+    try {
+      const res = await fetch(API_URL);
+      employeeDatabase = await res.json();
+      return employeeDatabase;
+    } catch (err) {
+      console.error("Failed to load DB from Google Sheet", err);
+      alert("Error connecting to Database server.");
+      return [];
     }
+  }
 
-    * { box-sizing: border-box; margin: 0; padding: 0; }
+  // Daily Session Check
+  async function checkDailySession() {
+    const employees = await fetchEmployeesFromSheet();
+    const sessionData = localStorage.getItem("pathao_session");
 
-    body {
-      font-family: 'Plus Jakarta Sans', sans-serif;
-      background-color: var(--bg-gray);
-      color: var(--pathao-dark);
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      min-height: 100vh;
-      padding: 30px 15px;
+    if (sessionData) {
+      const session = JSON.parse(sessionData);
+      const now = new Date().getTime();
+      const oneDay = 24 * 60 * 60 * 1000; // 24 Hours
+
+      if (now - session.timestamp < oneDay) {
+        // Validate user status against Google Sheet DB
+        const emp = employees.find(e => e.id.toUpperCase() === session.id.toUpperCase() && e.status === "Active");
+        if (emp) {
+          grantAccess(emp);
+          return;
+        }
+      }
     }
+    // Show Checkpost popup if session is invalid or missing
+    document.getElementById("checkpostModal").style.display = "flex";
+  }
 
-    /* Main App Dashboard */
-    .app-card {
-      background: var(--card-bg);
-      border: 1px solid var(--border-color);
-      border-radius: 16px;
-      box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.05);
-      width: 100%;
-      max-width: 760px;
-      padding: 32px;
-      margin-bottom: 30px;
-    }
-
-    .brand-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      border-bottom: 2px solid var(--bg-gray);
-      padding-bottom: 20px;
-      margin-bottom: 20px;
-    }
-
-    .logo-container { display: flex; align-items: center; gap: 12px; }
-    .logo-container img { height: 40px; object-fit: contain; }
-    .app-title { font-size: 22px; font-weight: 800; color: var(--pathao-dark); }
-    .tagline { font-size: 13px; color: var(--text-muted); }
-
-    .user-info-bar {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      background-color: #F1F5F9;
-      padding: 12px 16px;
-      border-radius: 10px;
-      margin-bottom: 20px;
-      font-size: 13px;
-      font-weight: 600;
-    }
-
-    .btn-logout {
-      background: none;
-      border: none;
-      color: var(--pathao-red);
-      font-size: 12px;
-      font-weight: 700;
-      cursor: pointer;
-      text-decoration: underline;
-    }
-
-    .controls-row {
-      display: flex;
-      gap: 15px;
-      margin-bottom: 15px;
-      align-items: center;
-    }
-
-    .format-selector {
-      display: flex;
-      background: #F1F5F9;
-      padding: 4px;
-      border-radius: 8px;
-      gap: 4px;
-    }
-
-    .format-btn {
-      padding: 8px 16px;
-      border: none;
-      border-radius: 6px;
-      font-weight: 700;
-      font-size: 12px;
-      cursor: pointer;
-      background: transparent;
-      color: var(--text-muted);
-    }
-
-    .format-btn.active {
-      background: var(--pathao-red);
-      color: white;
-    }
-
-    textarea {
-      width: 100%;
-      height: 150px;
-      padding: 14px 16px;
-      border: 1.5px solid var(--border-color);
-      border-radius: 10px;
-      font-family: 'Courier New', monospace;
-      font-size: 13px;
-      background-color: #F8FAFC;
-      resize: vertical;
-      outline: none;
-    }
-
-    textarea:focus { border-color: var(--pathao-red); background-color: #FFF; }
-
-    .btn-group { display: flex; gap: 12px; margin-top: 20px; }
-
-    button {
-      flex: 1;
-      padding: 14px 20px;
-      border: none;
-      border-radius: 10px;
-      font-size: 14px;
-      font-weight: 700;
-      cursor: pointer;
-      display: inline-flex;
-      justify-content: center;
-      align-items: center;
-      gap: 8px;
-    }
-
-    .btn-primary { background-color: var(--pathao-red); color: white; }
-    .btn-primary:hover { background-color: var(--pathao-hover); }
-    .btn-secondary { background-color: var(--pathao-dark); color: white; }
-    .btn-admin { background-color: #0284C7; color: white; margin-top: 15px; width: 100%; }
-
-    .developer-credit {
-      text-align: center;
-      margin-top: 20px;
-      padding-top: 16px;
-      border-top: 1px solid var(--border-color);
-      font-size: 12px;
-      color: var(--text-muted);
-    }
-    .developer-credit strong { color: var(--pathao-red); }
-
-    /* Modals & Popups */
-    .modal-overlay {
-      position: fixed;
-      top: 0; left: 0; width: 100%; height: 100%;
-      background: rgba(15, 23, 42, 0.7);
-      backdrop-filter: blur(4px);
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      z-index: 9999;
-    }
-
-    .modal-box {
-      background: white;
-      padding: 30px;
-      border-radius: 16px;
-      width: 90%;
-      max-width: 440px;
-      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
-      text-align: center;
-    }
-
-    .modal-box h3 { margin-bottom: 8px; font-size: 20px; }
-    .modal-box p { font-size: 13px; color: var(--text-muted); margin-bottom: 20px; }
+  async function submitCheckpost() {
+    const inputId = document.getElementById("popupIdInput").value.trim().toUpperCase();
     
-    .modal-box input {
-      width: 100%;
-      padding: 12px;
-      border: 1.5px solid var(--border-color);
-      border-radius: 8px;
-      font-size: 15px;
-      font-weight: 600;
-      text-align: center;
-      margin-bottom: 15px;
-      outline: none;
-    }
+    // Ensure fresh database lookup on login attempt
+    const employees = await fetchEmployeesFromSheet();
+    const emp = employees.find(e => e.id.toUpperCase() === inputId && e.status === "Active");
 
-    .error-msg {
-      color: var(--error-red);
-      font-size: 12px;
-      font-weight: 600;
-      margin-bottom: 12px;
-      display: none;
-    }
-
-    .tab-nav {
-      display: flex;
-      border-bottom: 2px solid var(--border-color);
-      margin-bottom: 15px;
-    }
-
-    .tab-btn {
-      flex: 1;
-      padding: 10px;
-      background: none;
-      border: none;
-      font-weight: 700;
-      font-size: 13px;
-      color: var(--text-muted);
-      cursor: pointer;
-      border-bottom: 2px solid transparent;
-      margin-bottom: -2px;
-    }
-
-    .tab-btn.active {
-      color: var(--pathao-red);
-      border-bottom-color: var(--pathao-red);
-    }
-
-    .admin-table-container {
-      max-height: 280px;
-      overflow-y: auto;
-      margin-bottom: 15px;
-      border: 1px solid var(--border-color);
-      border-radius: 8px;
-    }
-
-    table { width: 100%; border-collapse: collapse; font-size: 12px; text-align: left; }
-    th, td { padding: 10px; border-bottom: 1px solid var(--border-color); }
-    th { background-color: #F8FAFC; position: sticky; top: 0; }
-
-    .status-active { color: var(--success-green); font-weight: bold; }
-    .status-blocked { color: var(--error-red); font-weight: bold; }
-
-    .action-btn {
-      padding: 4px 8px;
-      font-size: 11px;
-      border-radius: 4px;
-      border: none;
-      cursor: pointer;
-    }
-
-    /* A4 Printable Document Layout */
-    .a4-container {
-      background: white;
-      width: 210mm;
-      min-height: 297mm;
-      padding: 12mm 15mm;
-      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
-      box-sizing: border-box;
-      display: flex;
-      flex-direction: column;
-      justify-content: space-between;
-    }
-
-    .doc-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding-bottom: 12px;
-      border-bottom: 2px solid var(--pathao-red);
-      margin-bottom: 18px;
-    }
-
-    .code-grid { display: grid; gap: 12px; }
-    .code-grid.qr-mode { grid-template-columns: repeat(4, 1fr); }
-    .code-grid.barcode-mode { grid-template-columns: repeat(2, 1fr); }
-
-    .code-card {
-      border: 1px solid #CBD5E1;
-      border-radius: 8px;
-      padding: 10px 6px;
-      text-align: center;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      background: #FFF;
-      break-inside: avoid;
-    }
-
-    .code-card p { margin-top: 6px; font-size: 9.5px; font-weight: 700; font-family: monospace; }
-
-    .doc-footer {
-      padding-top: 10px;
-      border-top: 1px solid var(--border-color);
-      display: flex;
-      justify-content: space-between;
-      font-size: 9.5px;
-      color: var(--text-muted);
-      margin-top: auto;
-    }
-
-    @media print {
-      body { background: none; padding: 0; }
-      .app-card, .modal-overlay { display: none !important; }
-      .a4-container { box-shadow: none; padding: 8mm 10mm; width: 100%; min-height: 100vh; }
-      @page { size: A4; margin: 0; }
-    }
-  </style>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
-</head>
-<body>
-
-  <div class="app-card">
-    <div class="brand-header">
-      <div class="logo-container">
-        <img src="https://pathao.com/wp-content/uploads/2023/10/Pathao-Logo_Vertical_with_TagLine.png" alt="Pathao Logo">
-        <div>
-          <div class="app-title">Code Studio</div>
-          <div class="tagline">QR & Barcode Generator</div>
-        </div>
-      </div>
-      <span style="font-size: 11px; background:#FDF2F8; color:var(--pathao-red); padding:4px 10px; border-radius:12px; font-weight:700;">PRO ACCESS</span>
-    </div>
-
-    <div class="user-info-bar">
-      <div>
-        <span>Active User: <strong id="activeUserDisplay">Checking...</strong></span>
-        <div style="font-size: 10px; color: var(--text-muted); margin-top: 2px;" id="clockDisplay">--</div>
-      </div>
-      <button class="btn-logout" onclick="clearSession()">Switch / Logout</button>
-    </div>
-
-    <div class="controls-row">
-      <label style="font-weight:700; font-size:13px;">Format Type:</label>
-      <div class="format-selector">
-        <button id="btnQR" class="format-btn active" onclick="switchFormat('QR')">QR Code</button>
-        <button id="btnBarcode" class="format-btn" onclick="switchFormat('BARCODE')">Barcode</button>
-      </div>
-    </div>
-
-    <label style="font-weight:700; font-size:13px; display:block; margin-bottom:8px;">Tracking Codes (1 per line):</label>
-    <textarea id="bulkInput"></textarea>
-
-    <div class="btn-group">
-      <button class="btn-primary" onclick="handleGenerateAction()">Generate Output Sheet</button>
-      <button class="btn-secondary" onclick="handlePrintAction()">Print / Save A4 Sheet</button>
-    </div>
-
-    <button id="adminBtn" class="btn-admin" style="display: none;" onclick="openAdminModal()">
-      Manage Access & Audit History (Admin Panel)
-    </button>
-
-    <div class="developer-credit">
-      Designed & Developed by <strong>Asad Biswas</strong>
-    </div>
-  </div>
-
-  <div id="checkpostModal" class="modal-overlay">
-    <div class="modal-box">
-      <img src="https://pathao.com/wp-content/uploads/2023/10/Pathao-Logo_Vertical_with_TagLine.png" height="35" style="margin-bottom:12px;">
-      <h3>Security Checkpost</h3>
-      <p>Enter your E - ID to authorize session for today.</p>
+    if (emp) {
+      // Save 24-hour Session
+      const sessionData = { id: emp.id, name: emp.name, timestamp: new Date().getTime() };
+      localStorage.setItem("pathao_session", JSON.stringify(sessionData));
       
-      <div id="popupError" class="error-msg">Invalid or Blocked Employee ID!</div>
-      <input type="text" id="popupIdInput" placeholder="Enter E - ID (e.g. M 1825)">
-      
-      <button class="btn-primary" style="width: 100%;" onclick="submitCheckpost()">Verify & Unlock</button>
-    </div>
-  </div>
+      document.getElementById("popupError").style.display = "none";
+      document.getElementById("checkpostModal").style.display = "none";
+      grantAccess(emp);
+    } else {
+      document.getElementById("popupError").style.display = "block";
+    }
+  }
 
-  <div id="adminModal" class="modal-overlay" style="display: none;">
-    <div class="modal-box" style="max-width: 600px; text-align: left;">
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-        <h3 style="margin: 0;">Admin Management</h3>
-        <button onclick="closeAdminModal()" style="background:none; border:none; font-size:18px; cursor:pointer;">&times;</button>
-      </div>
-
-      <div class="tab-nav">
-        <button id="tabUsersBtn" class="tab-btn active" onclick="switchAdminTab('USERS')">User Authorization</button>
-        <button id="tabHistoryBtn" class="tab-btn" onclick="switchAdminTab('HISTORY')">Activity History</button>
-      </div>
-
-      <div id="tabUsersContent">
-        <div style="display: flex; gap: 8px; margin-bottom: 12px;">
-          <input type="text" id="newEmpName" placeholder="Employee Name" style="margin:0; font-size:12px; text-align:left;">
-          <input type="text" id="newEmpId" placeholder="E - ID" style="margin:0; font-size:12px; text-align:left; width: 110px;">
-          <button class="btn-primary" style="padding: 8px 12px; font-size:12px; flex:none;" onclick="addEmployee()">Add</button>
-        </div>
-
-        <div class="admin-table-container">
-          <table>
-            <thead>
-              <tr>
-                <th>Name</th>
-                <th>E - ID</th>
-                <th>Status</th>
-                <th>Action</th>
-              </tr>
-            </thead>
-            <tbody id="adminTableBody"></tbody>
-          </table>
-        </div>
-      </div>
-
-      <div id="tabHistoryContent" style="display: none;">
-        <div class="admin-table-container">
-          <table>
-            <thead>
-              <tr>
-                <th>Timestamp</th>
-                <th>User</th>
-                <th>Action</th>
-                <th>Details</th>
-              </tr>
-            </thead>
-            <tbody id="historyTableBody"></tbody>
-          </table>
-        </div>
-      </div>
-
-      <button class="btn-secondary" style="width: 100%; margin-top: 10px;" onclick="closeAdminModal()">Close Panel</button>
-    </div>
-  </div>
-
-  <div class="a4-container">
-    <div>
-      <div class="doc-header">
-        <img src="https://pathao.com/wp-content/uploads/2023/10/Pathao-Logo_Vertical_with_TagLine.png" height="38">
-        <div style="text-align: right;">
-          <h3 style="font-size:14px; font-weight:800;" id="docTitleHeader">Pathao Courier Manifest</h3>
-          <p id="docUserTag" style="font-size:10px; color:var(--text-muted);">Generated By: --</p>
-          <p id="docTimeTag" style="font-size:10px; color:var(--text-muted);">Timestamp: --</p>
-          <p id="itemCount" style="font-size:10px; color:var(--text-muted);">0 Tracking Items</p>
-        </div>
-      </div>
-      <div id="codeGrid" class="code-grid qr-mode"></div>
-    </div>
-
-    <div class="doc-footer">
-      <span>Internal Delivery Manifest &bull; Confidential</span>
-      <span>System Created by <strong>Asad Biswas</strong></span>
-    </div>
-  </div>
-
-  <script>
-    const GSHEET_API_URL = "https://script.google.com/a/macros/pathao.com/s/AKfycbzkG40odZPB3IKzd1i05DrnVLpDZ1_cDzGuB_n57BPSpzGt2JBsjDZ5z7Fn686RAYcWYQ/exec";
-
-    const defaultDatabase = [
-      { id: "M 1693", name: "Md. Nayemul Hasan", status: "Active" },
-      { id: "C 1093", name: "Md.Abdul Alim", status: "Active" },
-      { id: "C 2727", name: "Md.Sumon Mia", status: "Active" },
-      { id: "C 3747", name: "Md.Rubel", status: "Active" },
-      { id: "C 2699", name: "Meherab maksud", status: "Active" },
-      { id: "C 4421", name: "Limon Chowdhury", status: "Active" },
-      { id: "C 4459", name: "Tanveer Rana", status: "Active" },
-      { id: "M 1880", name: "Hasnain rabbi sourid", status: "Active" },
-      { id: "M 1825", name: "Asad Biswas", status: "Active", isAdmin: true },
-      { id: "C 4203", name: "Md. Srabon Mridha", status: "Active" },
-      { id: "C 4186", name: "Md Tanvir Mir", status: "Active" },
-      { id: "C 4476", name: "Abdur Rahim", status: "Active" },
-      { id: "C 5254", name: "Md Shakib Uddin", status: "Active" },
-      { id: "C 4663", name: "Md. Nazmul Haque", status: "Active" },
-      { id: "C 3226", name: "Md Yashin Rafi", status: "Active" },
-      { id: "NEW", name: "Emran", status: "Active" }
-    ];
-
-    let currentFormat = "QR";
-    let activeUser = null;
-
-    function getTodayDateString() {
-      const d = new Date();
-      return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  function grantAccess(emp) {
+    activeUser = emp;
+    document.getElementById("activeUserDisplay").innerText = `${emp.name} (${emp.id})`;
+    document.getElementById("docUserTag").innerText = `Generated By: ${emp.name} (${emp.id})`;
+    
+    // Show Admin Panel Button if user is marked as Admin in Sheet or has ID M 1825
+    if (emp.isAdmin || emp.id.toUpperCase() === "M 1825") {
+      document.getElementById("adminBtn").style.display = "block";
+    } else {
+      document.getElementById("adminBtn").style.display = "none";
     }
 
-    function updateClockDisplay() {
-      const now = new Date();
-      const timeStr = now.toLocaleDateString() + " " + now.toLocaleTimeString();
-      document.getElementById("clockDisplay").innerText = "Session Active | " + timeStr;
+    generateBatchQR();
+  }
+
+  function clearSession() {
+    localStorage.removeItem("pathao_session");
+    location.reload();
+  }
+
+  // Admin Panel Functions
+  async function openAdminModal() {
+    await renderAdminTable();
+    document.getElementById("adminModal").style.display = "flex";
+  }
+
+  function closeAdminModal() {
+    document.getElementById("adminModal").style.display = "none";
+  }
+
+  async function renderAdminTable() {
+    const tbody = document.getElementById("adminTableBody");
+    tbody.innerHTML = "<tr><td colspan='4' style='text-align:center;'>Loading data from Google Sheet...</td></tr>";
+
+    const employees = await fetchEmployeesFromSheet();
+    tbody.innerHTML = "";
+
+    employees.forEach((emp) => {
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td>${emp.name}</td>
+        <td><strong>${emp.id}</strong></td>
+        <td class="${emp.status === 'Active' ? 'status-active' : 'status-blocked'}">${emp.status}</td>
+        <td>
+          ${emp.id.toUpperCase() === 'M 1825' ? '<em>System Admin</em>' : `
+            <button class="action-btn" style="background-color:${emp.status === 'Active' ? '#EF4444' : '#10B981'}; color:white;" onclick="toggleStatus('${emp.id}')">
+              ${emp.status === 'Active' ? 'Block' : 'Unblock'}
+            </button>
+          `}
+        </td>
+      `;
+      tbody.appendChild(tr);
+    });
+  }
+
+  async function toggleStatus(empId) {
+    const res = await fetch(API_URL, {
+      method: "POST",
+      body: JSON.stringify({ action: "toggleStatus", id: empId })
+    });
+    const result = await res.json();
+    if (result.success) {
+      await renderAdminTable();
+    } else {
+      alert(result.message);
     }
-    setInterval(updateClockDisplay, 1000);
+  }
 
-    function getEmployees() {
-      const stored = localStorage.getItem("pathao_emp_db");
-      return stored ? JSON.parse(stored) : defaultDatabase;
-    }
+  async function addEmployee() {
+    const name = document.getElementById("newEmpName").value.trim();
+    const id = document.getElementById("newEmpId").value.trim().toUpperCase();
 
-    function saveEmployees(db) {
-      localStorage.setItem("pathao_emp_db", JSON.stringify(db));
-    }
-
-    function getHistoryLogs() {
-      const stored = localStorage.getItem("pathao_history_db");
-      return stored ? JSON.parse(stored) : [];
-    }
-
-    function addHistoryLog(actionType, details) {
-      if (!activeUser) return;
-
-      const logPayload = {
-        timestamp: new Date().toLocaleString(),
-        user: `${activeUser.name} (${activeUser.id})`,
-        action: actionType,
-        details: details
-      };
-
-      // 1. Save locally for instantaneous admin table rendering
-      const history = getHistoryLogs();
-      history.unshift(logPayload);
-      localStorage.setItem("pathao_history_db", JSON.stringify(history));
-
-      // 2. Post to Google Sheet via Apps Script Endpoint
-      if (GSHEET_API_URL) {
-        fetch(GSHEET_API_URL, {
-          method: "POST",
-          mode: "no-cors",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(logPayload)
-        }).catch(err => console.error("GSheet post error:", err));
-      }
-    }
-
-    function checkDailySession() {
-      const sessionData = localStorage.getItem("pathao_session");
-      if (sessionData) {
-        const session = JSON.parse(sessionData);
-        const today = getTodayDateString();
-
-        if (session.dateString === today) {
-          const employees = getEmployees();
-          const emp = employees.find(e => e.id === session.id && e.status === "Active");
-          if (emp) {
-            grantAccess(emp);
-            return;
-          }
-        }
-      }
-      document.getElementById("checkpostModal").style.display = "flex";
-    }
-
-    function submitCheckpost() {
-      const inputId = document.getElementById("popupIdInput").value.trim().toUpperCase();
-      const employees = getEmployees();
-      const emp = employees.find(e => e.id.toUpperCase() === inputId && e.status === "Active");
-
-      if (emp) {
-        const sessionData = { id: emp.id, name: emp.name, dateString: getTodayDateString() };
-        localStorage.setItem("pathao_session", JSON.stringify(sessionData));
-        
-        document.getElementById("popupError").style.display = "none";
-        document.getElementById("checkpostModal").style.display = "none";
-        
-        grantAccess(emp);
-        addHistoryLog("LOGIN", "Logged into system");
-      } else {
-        document.getElementById("popupError").style.display = "block";
-      }
+    if (!name || !id) {
+      alert("Enter both Name and E - ID!");
+      return;
     }
 
-    function grantAccess(emp) {
-      activeUser = emp;
-      document.getElementById("activeUserDisplay").innerText = `${emp.name} (${emp.id})`;
-      document.getElementById("docUserTag").innerText = `Generated By: ${emp.name} (${emp.id})`;
-      updateClockDisplay();
+    const res = await fetch(API_URL, {
+      method: "POST",
+      body: JSON.stringify({ action: "add", name, id })
+    });
 
-      if (emp.id.toUpperCase() === "M 1825") {
-        document.getElementById("adminBtn").style.display = "block";
-      } else {
-        document.getElementById("adminBtn").style.display = "none";
-      }
-
-      generateBatchCodes();
-    }
-
-    function clearSession() {
-      if(activeUser) addHistoryLog("LOGOUT", "Manual logout");
-      localStorage.removeItem("pathao_session");
-      location.reload();
-    }
-
-    function switchFormat(type) {
-      currentFormat = type;
-      document.getElementById("btnQR").className = type === "QR" ? "format-btn active" : "format-btn";
-      document.getElementById("btnBarcode").className = type === "BARCODE" ? "format-btn active" : "format-btn";
-      
-      const grid = document.getElementById("codeGrid");
-      grid.className = type === "QR" ? "code-grid qr-mode" : "code-grid barcode-mode";
-      
-      generateBatchCodes();
-    }
-
-    function handleGenerateAction() {
-      generateBatchCodes();
-      const items = getParsedInputs();
-      if(items.length > 0) {
-        addHistoryLog("CREATE", `Generated ${items.length} ${currentFormat} item(s)`);
-      }
-    }
-
-    function handlePrintAction() {
-      const items = getParsedInputs();
-      if (!activeUser) {
-        alert("Please login first!");
-        return;
-      }
-      if(items.length === 0) {
-        alert("Please enter tracking codes before printing.");
-        return;
-      }
-      addHistoryLog("PRINT", `Printed A4 Sheet with ${items.length} ${currentFormat} item(s)`);
-      window.print();
-    }
-
-    function getParsedInputs() {
-      const rawText = document.getElementById("bulkInput").value;
-      return rawText.split('\n').map(item => item.trim()).filter(item => item.length > 0);
-    }
-
-    function generateBatchCodes() {
-      const items = getParsedInputs();
-      const grid = document.getElementById("codeGrid");
-      const itemCountSpan = document.getElementById("itemCount");
-      const timeTag = document.getElementById("docTimeTag");
-      const titleHeader = document.getElementById("docTitleHeader");
-
-      grid.innerHTML = "";
-      itemCountSpan.innerText = `${items.length} Items Total`;
-      timeTag.innerText = `Timestamp: ${new Date().toLocaleString()}`;
-      titleHeader.innerText = `Pathao Courier ${currentFormat} Manifest`;
-
-      if (items.length === 0) return;
-
-      items.forEach((codeData, index) => {
-        const card = document.createElement("div");
-        card.className = "code-card";
-
-        const container = document.createElement("div");
-        container.id = "code_box_" + index;
-
-        const label = document.createElement("p");
-        label.innerText = codeData;
-
-        card.appendChild(container);
-        card.appendChild(label);
-        grid.appendChild(card);
-
-        if (currentFormat === "QR") {
-          new QRCode(container, { text: codeData, width: 85, height: 85, correctLevel: QRCode.CorrectLevel.M });
-        } else {
-          const svgElem = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-          container.appendChild(svgElem);
-          JsBarcode(svgElem, codeData, { format: "CODE128", width: 1.5, height: 45, displayValue: false, margin: 2 });
-        }
-      });
-    }
-
-    function openAdminModal() {
-      switchAdminTab('USERS');
-      document.getElementById("adminModal").style.display = "flex";
-    }
-
-    function closeAdminModal() {
-      document.getElementById("adminModal").style.display = "none";
-    }
-
-    function switchAdminTab(tab) {
-      const uBtn = document.getElementById("tabUsersBtn");
-      const hBtn = document.getElementById("tabHistoryBtn");
-      const uContent = document.getElementById("tabUsersContent");
-      const hContent = document.getElementById("tabHistoryContent");
-
-      if (tab === 'USERS') {
-        uBtn.className = "tab-btn active";
-        hBtn.className = "tab-btn";
-        uContent.style.display = "block";
-        hContent.style.display = "none";
-        renderAdminTable();
-      } else {
-        uBtn.className = "tab-btn";
-        hBtn.className = "tab-btn active";
-        uContent.style.display = "none";
-        hContent.style.display = "block";
-        renderHistoryTable();
-      }
-    }
-
-    function renderAdminTable() {
-      const employees = getEmployees();
-      const tbody = document.getElementById("adminTableBody");
-      tbody.innerHTML = "";
-
-      employees.forEach((emp, index) => {
-        const tr = document.createElement("tr");
-        tr.innerHTML = `
-          <td>${emp.name}</td>
-          <td><strong>${emp.id}</strong></td>
-          <td class="${emp.status === 'Active' ? 'status-active' : 'status-blocked'}">${emp.status}</td>
-          <td>
-            ${emp.id === 'M 1825' ? '<em>System Admin</em>' : `
-              <button class="action-btn" style="background-color:${emp.status === 'Active' ? '#EF4444' : '#10B981'}; color:white;" onclick="toggleStatus(${index})">
-                ${emp.status === 'Active' ? 'Block' : 'Unblock'}
-              </button>
-            `}
-          </td>
-        `;
-        tbody.appendChild(tr);
-      });
-    }
-
-    function renderHistoryTable() {
-      const history = getHistoryLogs();
-      const tbody = document.getElementById("historyTableBody");
-      tbody.innerHTML = "";
-
-      if (history.length === 0) {
-        tbody.innerHTML = "<tr><td colspan='4' style='text-align:center;'>No activity logged yet.</td></tr>";
-        return;
-      }
-
-      history.forEach(log => {
-        const tr = document.createElement("tr");
-        tr.innerHTML = `
-          <td><small>${log.timestamp}</small></td>
-          <td>${log.user}</td>
-          <td><strong>${log.action}</strong></td>
-          <td>${log.details}</td>
-        `;
-        tbody.appendChild(tr);
-      });
-    }
-
-    function toggleStatus(index) {
-      const employees = getEmployees();
-      const targetEmp = employees[index];
-      targetEmp.status = targetEmp.status === "Active" ? "Blocked" : "Active";
-      saveEmployees(employees);
-      addHistoryLog("ADMIN", `${targetEmp.status} user ${targetEmp.name} (${targetEmp.id})`);
-      renderAdminTable();
-    }
-
-    function addEmployee() {
-      const name = document.getElementById("newEmpName").value.trim();
-      const id = document.getElementById("newEmpId").value.trim().toUpperCase();
-
-      if (!name || !id) {
-        alert("Enter both Name and E - ID!");
-        return;
-      }
-
-      const employees = getEmployees();
-      if (employees.some(e => e.id.toUpperCase() === id)) {
-        alert("E - ID already exists!");
-        return;
-      }
-
-      employees.push({ name, id, status: "Active" });
-      saveEmployees(employees);
-      addHistoryLog("ADMIN", `Added new user ${name} (${id})`);
-      
+    const result = await res.json();
+    if (result.success) {
       document.getElementById("newEmpName").value = "";
       document.getElementById("newEmpId").value = "";
-      renderAdminTable();
+      await renderAdminTable();
+    } else {
+      alert(result.message);
     }
+  }
 
-    window.onload = function() {
-      document.getElementById("bulkInput").value = 
-`
-`;
-      checkDailySession();
-    };
-  </script>
+  // QR Generation Logic
+  function generateBatchQR() {
+    const rawText = document.getElementById("bulkInput").value;
+    const grid = document.getElementById("qrGrid");
+    const itemCountSpan = document.getElementById("itemCount");
 
-</body>
-</html>
+    const items = rawText.split('\n').map(item => item.trim()).filter(item => item.length > 0);
+    grid.innerHTML = "";
+    itemCountSpan.innerText = `${items.length} Tracking Items Total`;
+
+    if (items.length === 0) return;
+
+    items.forEach((codeData, index) => {
+      const card = document.createElement("div");
+      card.className = "qr-card";
+
+      const qrBox = document.createElement("div");
+      qrBox.id = "qr_box_" + index;
+
+      const label = document.createElement("p");
+      label.innerText = codeData;
+
+      card.appendChild(qrBox);
+      card.appendChild(label);
+      grid.appendChild(card);
+
+      new QRCode(qrBox, { text: codeData, width: 90, height: 90, correctLevel: QRCode.CorrectLevel.M });
+    });
+  }
+
+  window.onload = function() {
+    document.getElementById("bulkInput").value = 
+`DA220826AG9V7J
+DB220826ABUF3P
+DC220826MKWNAJ
+DD2208262MMFQC
+DG220826X94FWN
+DH220826VE3PBC
+DI22082684L4T6
+DL200826H83XAJ
+DL220826DGNE5Z
+DM21082659UEZN
+DM220826CYNQ42
+DN1708269CEGEY
+DN220826T5CH3X
+DR2208269MDKM5
+DT0808266XVF27
+PK260726WAC9CH
+PM160826C7Y7KY`;
+    checkDailySession();
+  };
+</script>
