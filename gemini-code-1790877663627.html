@@ -1,0 +1,1141 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Daily Hub Operations & Team Tracker</title>
+  
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: { 50: '#f0fdfa', 500: '#14b8a6', 600: '#0d9488', accent: '#06b6d4' }
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- Google Fonts & FontAwesome -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  
+  <!-- SheetJS CDN for Excel Parsing & Generating -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+
+  <style>
+    body { font-family: 'Inter', sans-serif; background: #070a12; color: #f3f4f6; }
+    .glass-panel { background: rgba(15, 23, 42, 0.85); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.1); }
+    .glass-card { background: rgba(30, 41, 59, 0.6); backdrop-filter: blur(8px); border: 1px solid rgba(255, 255, 255, 0.08); }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col pb-12">
+
+  <!-- LOGIN OVERLAY -->
+  <div id="loginScreen" class="fixed inset-0 z-50 bg-slate-950 flex items-center justify-center p-4">
+    <div class="glass-panel w-full max-w-md rounded-2xl p-8 border border-slate-800 shadow-2xl relative">
+      <div class="text-center mb-6">
+        <div class="w-12 h-12 rounded-2xl bg-cyan-600/20 border border-cyan-500/40 text-cyan-400 flex items-center justify-center mx-auto mb-3 text-2xl">
+          <i class="fa-solid fa-boxes-packing"></i>
+        </div>
+        <h2 class="text-xl font-bold text-slate-100">Hub Operations Login</h2>
+        <p class="text-xs text-slate-400 mt-1">Enter your email to access your personal dashboard</p>
+      </div>
+
+      <form onsubmit="handleLoginSubmit(event)" class="space-y-4">
+        <div>
+          <label class="block text-xs font-semibold text-slate-300 mb-1">Work Email</label>
+          <div class="relative">
+            <i class="fa-solid fa-envelope absolute left-3 top-3 text-slate-500 text-xs"></i>
+            <input type="email" id="loginEmailInput" class="w-full bg-slate-900/90 border border-slate-700 text-xs text-white rounded-lg pl-9 pr-3 py-2.5 focus:border-cyan-500 focus:outline-none" placeholder="e.g. asad.biswas@pathao.com" required>
+          </div>
+        </div>
+
+        <button type="submit" class="w-full bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-bold text-xs py-2.5 rounded-lg transition shadow-lg flex items-center justify-center gap-2">
+          <i class="fa-solid fa-right-to-bracket"></i> Sign In
+        </button>
+      </form>
+
+      <div class="mt-6 pt-4 border-t border-slate-800/80 text-center">
+        <p class="text-[11px] text-slate-500">System Administrator: <span class="text-cyan-400">asad.biswas@pathao.com</span></p>
+      </div>
+    </div>
+  </div>
+
+  <!-- DASHBOARD APP -->
+  <div id="dashboardApp" class="hidden flex-grow flex flex-col">
+
+    <!-- HEADER -->
+    <header class="sticky top-0 z-40 glass-panel border-b border-slate-800">
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between flex-wrap gap-4">
+        
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-xl bg-cyan-600 flex items-center justify-center text-white">
+            <i class="fa-solid fa-boxes-packing text-xl"></i>
+          </div>
+          <div>
+            <h1 class="text-lg font-bold bg-clip-text text-transparent bg-gradient-to-r from-cyan-400 to-blue-400" id="dashboardTitle">
+              HUB OPERATIONAL ROUTINE & TRACKER
+            </h1>
+            <p class="text-xs text-slate-400" id="liveClock">Loading Clock...</p>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-2 flex-wrap">
+          <!-- Admin Controls -->
+          <div id="adminControls" class="flex items-center gap-2 flex-wrap hidden">
+            <select id="staffFilterSelect" onchange="filterTasksByStaff(this.value)" class="bg-slate-900 text-xs text-slate-200 border border-slate-700 rounded-lg px-3 py-2 cursor-pointer">
+              <option value="ALL">👤 View All Assigned Staff</option>
+            </select>
+
+            <button onclick="openAddNewTaskModal()" class="bg-cyan-600 hover:bg-cyan-500 text-xs text-white font-bold px-3 py-2 rounded-lg flex items-center gap-1.5 shadow">
+              <i class="fa-solid fa-plus-circle"></i> Add Task
+            </button>
+
+            <button onclick="openModal('excelUploadModal')" class="bg-emerald-600 hover:bg-emerald-500 text-xs text-white font-bold px-3 py-2 rounded-lg flex items-center gap-1.5 shadow">
+              <i class="fa-solid fa-file-excel"></i> Import Excel
+            </button>
+
+            <button onclick="openModal('manualWorkModal')" class="bg-amber-600 hover:bg-amber-500 text-xs text-white font-semibold px-3 py-2 rounded-lg flex items-center gap-1.5 shadow">
+              <i class="fa-solid fa-clipboard-list"></i> Add Instruction
+            </button>
+
+            <button onclick="openModal('staffDirectoryModal')" class="bg-slate-800 hover:bg-slate-700 text-xs border border-slate-700 text-slate-200 font-medium px-3 py-2 rounded-lg flex items-center gap-1.5">
+              <i class="fa-solid fa-users text-blue-400"></i> Manage Staff
+            </button>
+          </div>
+
+          <!-- User Controls -->
+          <div class="flex items-center gap-2 ml-2 pl-2 border-l border-slate-800">
+            <span id="currentUserTag" class="text-xs text-slate-300 bg-slate-900 px-3 py-1.5 rounded-lg border border-slate-800 font-medium"></span>
+            <button onclick="handleLogout()" class="bg-rose-950/60 hover:bg-rose-900/80 text-rose-300 text-xs border border-rose-800/80 px-3 py-1.5 rounded-lg flex items-center gap-1 font-medium">
+              <i class="fa-solid fa-power-off"></i> Logout
+            </button>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <!-- MAIN BODY -->
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-6 flex-grow space-y-6 w-full">
+
+      <div class="bg-amber-950/60 border border-amber-800 text-amber-200 text-xs p-3 rounded-xl flex items-center gap-3">
+        <i class="fa-solid fa-triangle-exclamation text-amber-400 text-lg"></i>
+        <div>
+          <span class="font-bold">Mandatory Operational Rule:</span> Every employee must process and follow up on at least <strong>2 IMS Tickets</strong> during their active shift. Log reference numbers in your personal tracker below.
+        </div>
+      </div>
+
+      <!-- INBUILT MANDATORY IMS DASHBOARD -->
+      <section id="builtInImsDashboard" class="glass-panel rounded-2xl p-5 border border-slate-800 space-y-4">
+        <div class="flex items-center justify-between border-b border-slate-800 pb-3 flex-wrap gap-2">
+          <div class="flex items-center gap-2">
+            <div class="w-8 h-8 rounded-lg bg-rose-600/20 border border-rose-500/40 text-rose-400 flex items-center justify-center text-sm font-bold">
+              <i class="fa-solid fa-ticket"></i>
+            </div>
+            <div>
+              <h2 class="text-sm font-bold text-rose-400">Inbuilt Mandatory IMS Ticket Dashboard</h2>
+              <p class="text-[11px] text-slate-400">Real-time incident management ticket logs & employee compliance status</p>
+            </div>
+          </div>
+          <button onclick="openModal('imsUpdateModal')" class="bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-bold px-3 py-1.5 rounded-lg flex items-center gap-1.5">
+            <i class="fa-solid fa-plus"></i> Log My IMS Tickets
+          </button>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div class="bg-slate-900/90 border border-slate-800 p-3 rounded-xl">
+            <span class="text-[10px] text-slate-400 block font-bold uppercase">Total Logged IMS Tickets</span>
+            <span class="text-xl font-bold text-cyan-400" id="totalImsCount">0</span>
+          </div>
+          <div class="bg-slate-900/90 border border-slate-800 p-3 rounded-xl">
+            <span class="text-[10px] text-slate-400 block font-bold uppercase">Compliant Staff (≥2 Tickets)</span>
+            <span class="text-xl font-bold text-emerald-400" id="compliantStaffCount">0</span>
+          </div>
+          <div class="bg-slate-900/90 border border-slate-800 p-3 rounded-xl">
+            <span class="text-[10px] text-slate-400 block font-bold uppercase">Non-Compliant Staff (&lt;2 Tickets)</span>
+            <span class="text-xl font-bold text-rose-400" id="nonCompliantStaffCount">0</span>
+          </div>
+          <div class="bg-slate-900/90 border border-slate-800 p-3 rounded-xl">
+            <span class="text-[10px] text-slate-400 block font-bold uppercase">Mandatory Rule Enforcement</span>
+            <span class="text-xs font-bold text-amber-400 block mt-1">🔒 Enforced on Task Completion</span>
+          </div>
+        </div>
+
+        <div class="overflow-x-auto border border-slate-800 rounded-xl">
+          <table class="w-full text-left text-xs text-slate-300">
+            <thead class="bg-slate-900 text-slate-400">
+              <tr>
+                <th class="p-2.5">Staff Name</th>
+                <th class="p-2.5">Email</th>
+                <th class="p-2.5">Ticket #1 ID</th>
+                <th class="p-2.5">Ticket #2 ID</th>
+                <th class="p-2.5">Total Logged</th>
+                <th class="p-2.5 text-right">Compliance Status</th>
+              </tr>
+            </thead>
+            <tbody id="imsDashboardTableBody" class="divide-y divide-slate-800 bg-slate-950/40"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- ADMIN-ONLY TASK PROGRESS MONITOR -->
+      <section id="adminTaskMonitorSection" class="glass-panel rounded-2xl p-5 border border-slate-800 hidden">
+        <div class="flex items-center justify-between mb-4 border-b border-slate-800 pb-3">
+          <h2 class="text-sm font-bold text-cyan-400 flex items-center gap-2">
+            <i class="fa-solid fa-list-check"></i> Global Task Progress Monitor (Admin View)
+          </h2>
+          <span class="text-[11px] text-slate-400">All Shifts Real-time Task Breakdown</span>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-xs text-slate-300">
+            <thead class="bg-slate-900 text-slate-400">
+              <tr>
+                <th class="p-2.5">Shift Window</th>
+                <th class="p-2.5">Task Title</th>
+                <th class="p-2.5">Assigned Employee</th>
+                <th class="p-2.5">Status</th>
+                <th class="p-2.5">Progress %</th>
+                <th class="p-2.5">Employee Shared Note</th>
+                <th class="p-2.5 text-right">Action</th>
+              </tr>
+            </thead>
+            <tbody id="adminTaskMonitorBody" class="divide-y divide-slate-800/80 bg-slate-950/40"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- DIRECTIVES SECTION -->
+      <section class="glass-panel rounded-2xl p-5 border border-slate-800">
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="text-sm font-bold text-amber-400 flex items-center gap-2">
+            <i class="fa-solid fa-note-sticky"></i> Specific Directives & Custom Instructions
+          </h2>
+        </div>
+        <div id="manualInstructionsContainer" class="grid grid-cols-1 md:grid-cols-2 gap-4"></div>
+      </section>
+
+      <!-- ROUTINE TASKS SECTION -->
+      <div class="glass-panel rounded-2xl p-5 border border-slate-800 space-y-4">
+        <div class="flex items-center justify-between flex-wrap gap-3 border-b border-slate-800 pb-3">
+          <div class="flex items-center gap-2 overflow-x-auto">
+            <button id="tab-morning" onclick="switchRoutineTab('morning')" class="routine-tab px-4 py-2 rounded-xl text-xs font-bold uppercase transition bg-cyan-600 text-white">
+              Morning Routine
+            </button>
+            <button id="tab-midday" onclick="switchRoutineTab('midday')" class="routine-tab px-4 py-2 rounded-xl text-xs font-bold uppercase transition bg-slate-800 text-slate-400">
+              Mid-Day Routine
+            </button>
+            <button id="tab-evening" onclick="switchRoutineTab('evening')" class="routine-tab px-4 py-2 rounded-xl text-xs font-bold uppercase transition bg-slate-800 text-slate-400">
+              Evening Routine
+            </button>
+          </div>
+          <span class="text-xs text-slate-400" id="taskViewLabel">Showing assigned tasks</span>
+        </div>
+
+        <!-- Task Cards Grid -->
+        <div id="routineCardsContainer" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5"></div>
+      </div>
+    </main>
+
+  </div>
+
+  <!-- EXCEL UPLOAD MODAL -->
+  <div id="excelUploadModal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-50 hidden flex items-center justify-center p-4">
+    <div class="glass-panel w-full max-w-lg rounded-2xl p-6 relative border border-slate-800">
+      <button onclick="closeModal('excelUploadModal')" class="absolute top-4 right-4 text-slate-400 hover:text-white"><i class="fa-solid fa-xmark"></i></button>
+      <h3 class="text-lg font-bold text-slate-100 mb-1">Bulk Upload Tasks via Excel</h3>
+      <p class="text-xs text-slate-400 mb-3">Upload an <code>.xlsx</code> or <code>.xls</code> spreadsheet containing task details and optional mandatory IMS ticket logs.</p>
+
+      <div class="bg-slate-900 border border-slate-800 p-3 rounded-xl text-xs text-slate-300 mb-4 space-y-1">
+        <div class="flex justify-between items-center mb-1">
+          <p class="font-bold text-cyan-400">Excel Header Columns Required:</p>
+          <button type="button" onclick="downloadExcelTemplate()" class="bg-cyan-900/80 hover:bg-cyan-800 text-cyan-200 border border-cyan-700 text-[10px] font-bold px-2 py-1 rounded flex items-center gap-1">
+            <i class="fa-solid fa-download"></i> Download Template
+          </button>
+        </div>
+        <p>• <strong>Slot</strong>: morning / midday / evening</p>
+        <p>• <strong>Title</strong>: Task name or description</p>
+        <p>• <strong>TimeSlot</strong>: e.g. "08:00 AM - 09:00 AM"</p>
+        <p>• <strong>Email</strong>: Assigned staff email address</p>
+        <p>• <strong>Priority</strong>: High / Medium / Low</p>
+        <p>• <strong>IMSTicket1 / IMSTicket2</strong>: (Optional) Initial mandatory tickets</p>
+      </div>
+
+      <form onsubmit="handleExcelImport(event)" class="space-y-4">
+        <div>
+          <label class="block text-xs text-slate-300 mb-1">Select Excel File</label>
+          <input type="file" id="excelFileInput" accept=".xlsx, .xls" class="w-full bg-slate-900 border border-slate-700 text-xs text-slate-200 rounded p-2 cursor-pointer" required>
+        </div>
+
+        <div class="flex justify-end gap-2 pt-2">
+          <button type="button" onclick="closeModal('excelUploadModal')" class="px-4 py-2 bg-slate-800 text-xs rounded text-slate-300">Cancel</button>
+          <button type="submit" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded flex items-center gap-1.5">
+            <i class="fa-solid fa-file-import"></i> Upload & Import
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- CREATE / EDIT / REASSIGN TASK MODAL -->
+  <div id="addNewTaskModal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-50 hidden flex items-center justify-center p-4">
+    <div class="glass-panel w-full max-w-lg rounded-2xl p-6 relative border border-slate-800">
+      <button onclick="closeModal('addNewTaskModal')" class="absolute top-4 right-4 text-slate-400 hover:text-white"><i class="fa-solid fa-xmark"></i></button>
+      <h3 class="text-lg font-bold text-slate-100 mb-1" id="taskModalHeader">Create / Edit Operational Task</h3>
+      <p class="text-xs text-slate-400 mb-4">Add or update task details and reassign staff.</p>
+
+      <form id="taskForm" onsubmit="handleSaveTask(event)" class="space-y-3">
+        <input type="hidden" id="editTaskId">
+        <div>
+          <label class="block text-xs text-slate-300 mb-1">Routine Shift Slot</label>
+          <select id="taskShiftSlot" class="w-full bg-slate-900 border border-slate-700 text-xs text-slate-200 rounded p-2.5" required>
+            <option value="morning">Morning Routine</option>
+            <option value="midday">Mid-Day Routine</option>
+            <option value="evening">Evening Routine</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs text-slate-300 mb-1">Task Title</label>
+          <input type="text" id="taskTitleInput" class="w-full bg-slate-900 border border-slate-700 text-xs text-white rounded p-2.5" placeholder="e.g. Inbound Reconciliation & Audit" required>
+        </div>
+        <div>
+          <label class="block text-xs text-slate-300 mb-1">Time Slot Window</label>
+          <input type="text" id="taskTimeSlotInput" class="w-full bg-slate-900 border border-slate-700 text-xs text-white rounded p-2.5" placeholder="e.g. 08:30 AM - 09:30 AM" required>
+        </div>
+        <div>
+          <label class="block text-xs text-slate-300 mb-1">Assigned Employee (Reassign Person)</label>
+          <select id="taskAssigneeSelect" class="w-full bg-slate-900 border border-slate-700 text-xs text-slate-200 rounded p-2.5" required></select>
+        </div>
+        <div>
+          <label class="block text-xs text-slate-300 mb-1">Priority Level</label>
+          <select id="taskPrioritySelect" class="w-full bg-slate-900 border border-slate-700 text-xs text-slate-200 rounded p-2.5">
+            <option value="High">🔴 High Priority</option>
+            <option value="Medium" selected>🟡 Medium Priority</option>
+            <option value="Low">🟢 Low Priority</option>
+          </select>
+        </div>
+
+        <div class="flex justify-end gap-2 pt-2">
+          <button type="button" onclick="closeModal('addNewTaskModal')" class="px-4 py-2 bg-slate-800 text-xs rounded text-slate-300">Cancel</button>
+          <button type="submit" class="px-4 py-2 bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-bold rounded">
+            Save & Update Task
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- TASK NOTE MODAL -->
+  <div id="taskNoteModal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-50 hidden flex items-center justify-center p-4">
+    <div class="glass-panel w-full max-w-md rounded-2xl p-6 relative border border-slate-800">
+      <button onclick="closeModal('taskNoteModal')" class="absolute top-4 right-4 text-slate-400 hover:text-white"><i class="fa-solid fa-xmark"></i></button>
+      <h3 class="text-lg font-bold text-slate-100 mb-1">Share Task Note</h3>
+      <p class="text-xs text-slate-400 mb-4">Attach a quick update or note for team and admin visibility.</p>
+
+      <form onsubmit="handleSaveTaskNote(event)" class="space-y-3">
+        <input type="hidden" id="noteSlot">
+        <input type="hidden" id="noteTaskId">
+        <div>
+          <label class="block text-xs text-slate-300 mb-1">Short Progress Note</label>
+          <textarea id="taskNoteText" rows="3" class="w-full bg-slate-900 border border-slate-700 text-xs text-white rounded p-2.5" placeholder="e.g. Completed 40/50 parcels, waiting for second vehicle..." required></textarea>
+        </div>
+        <div class="flex justify-end gap-2 pt-2">
+          <button type="button" onclick="closeModal('taskNoteModal')" class="px-4 py-2 bg-slate-800 text-xs rounded text-slate-300">Cancel</button>
+          <button type="submit" class="px-4 py-2 bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-bold rounded">Save Note</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- CUSTOM DIRECTIVE MODAL -->
+  <div id="manualWorkModal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-50 hidden flex items-center justify-center p-4">
+    <div class="glass-panel w-full max-w-lg rounded-2xl p-6 relative border border-slate-800">
+      <button onclick="closeModal('manualWorkModal')" class="absolute top-4 right-4 text-slate-400 hover:text-white"><i class="fa-solid fa-xmark"></i></button>
+      <h3 class="text-lg font-bold text-slate-100 mb-1">Assign Custom Instruction</h3>
+      <p class="text-xs text-slate-400 mb-4">Input a custom order or instruction for a specific team member.</p>
+
+      <form onsubmit="handleCreateManualInstruction(event)" class="space-y-3">
+        <div>
+          <label class="block text-xs text-slate-300 mb-1">Assign To Employee</label>
+          <select id="manualTargetStaff" class="w-full bg-slate-900 border border-slate-700 text-xs text-slate-200 rounded p-2.5" required></select>
+        </div>
+        <div>
+          <label class="block text-xs text-slate-300 mb-1">Work Title / Subject</label>
+          <input type="text" id="manualWorkTitle" class="w-full bg-slate-900 border border-slate-700 text-xs text-white rounded p-2.5" placeholder="e.g. Inspect Parcel Returns in Bay B" required>
+        </div>
+        <div>
+          <label class="block text-xs text-slate-300 mb-1">Detailed Instructions</label>
+          <textarea id="manualWorkDesc" rows="3" class="w-full bg-slate-900 border border-slate-700 text-xs text-slate-200 rounded p-2.5" placeholder="Detailed step-by-step notes..." required></textarea>
+        </div>
+        <div class="flex justify-end gap-2 pt-2">
+          <button type="button" onclick="closeModal('manualWorkModal')" class="px-4 py-2 bg-slate-800 text-xs rounded text-slate-300">Cancel</button>
+          <button type="submit" class="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold rounded">
+            Dispatch Instruction
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- IMS UPDATE MODAL -->
+  <div id="imsUpdateModal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-50 hidden flex items-center justify-center p-4">
+    <div class="glass-panel w-full max-w-md rounded-2xl p-6 relative border border-slate-800">
+      <button onclick="closeModal('imsUpdateModal')" class="absolute top-4 right-4 text-slate-400 hover:text-white"><i class="fa-solid fa-xmark"></i></button>
+      <h3 class="text-lg font-bold text-slate-100 mb-1">Log Mandatory IMS Tickets</h3>
+      <p class="text-xs text-slate-400 mb-4">At least 2 IMS Tickets followed up are mandatory per shift.</p>
+
+      <form onsubmit="handleImsUpdate(event)" class="space-y-3">
+        <div>
+          <label class="block text-xs text-slate-300 mb-1">IMS Ticket #1 Reference ID</label>
+          <input type="text" id="imsTicket1" class="w-full bg-slate-900 border border-slate-700 text-xs text-white rounded p-2.5" placeholder="e.g. IMS-88021" required>
+        </div>
+        <div>
+          <label class="block text-xs text-slate-300 mb-1">IMS Ticket #2 Reference ID</label>
+          <input type="text" id="imsTicket2" class="w-full bg-slate-900 border border-slate-700 text-xs text-white rounded p-2.5" placeholder="e.g. IMS-88045" required>
+        </div>
+        <div class="flex justify-end gap-2 pt-2">
+          <button type="button" onclick="closeModal('imsUpdateModal')" class="px-4 py-2 bg-slate-800 text-xs rounded text-slate-300">Cancel</button>
+          <button type="submit" class="px-4 py-2 bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-bold rounded">Save IMS Log</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- STAFF DIRECTORY MODAL -->
+  <div id="staffDirectoryModal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-50 hidden flex items-center justify-center p-4">
+    <div class="glass-panel w-full max-w-2xl rounded-2xl p-6 relative">
+      <button onclick="closeModal('staffDirectoryModal')" class="absolute top-4 right-4 text-slate-400 hover:text-white"><i class="fa-solid fa-xmark"></i></button>
+      <h3 class="text-lg font-bold text-slate-100 mb-1">Manage Staff Directory</h3>
+      <p class="text-xs text-slate-400 mb-4">Add or remove hub personnel records.</p>
+
+      <form onsubmit="handleAddEmployee(event)" class="grid grid-cols-1 sm:grid-cols-4 gap-2 mb-4 bg-slate-900 p-3 rounded-xl border border-slate-800">
+        <input type="text" id="newEmpId" placeholder="ID (e.g. EMP-105)" class="bg-slate-800 text-xs p-2 rounded border border-slate-700 text-white" required>
+        <input type="text" id="newEmpName" placeholder="Full Name" class="bg-slate-800 text-xs p-2 rounded border border-slate-700 text-white" required>
+        <input type="email" id="newEmpEmail" placeholder="Email Address" class="bg-slate-800 text-xs p-2 rounded border border-slate-700 text-white" required>
+        <button type="submit" class="bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-bold rounded p-2"><i class="fa-solid fa-plus mr-1"></i> Add Staff</button>
+      </form>
+
+      <div class="max-h-60 overflow-y-auto rounded-xl border border-slate-800">
+        <table class="w-full text-left text-xs text-slate-300">
+          <thead class="bg-slate-900 text-slate-400 sticky top-0">
+            <tr>
+              <th class="p-2.5">ID</th>
+              <th class="p-2.5">Name</th>
+              <th class="p-2.5">Email</th>
+              <th class="p-2.5 text-right">Action</th>
+            </tr>
+          </thead>
+          <tbody id="staffTableBody" class="divide-y divide-slate-800 bg-slate-950/40"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- SCRIPT LOGIC -->
+  <script>
+    const ADMIN_EMAIL = "asad.biswas@pathao.com";
+
+    let staffMembers = JSON.parse(localStorage.getItem('hub_staff')) || [
+      { id: "EMP-100", name: "Asad Biswas", email: "asad.biswas@pathao.com" },
+      { id: "EMP-101", name: "Rahim Ahmed", email: "rahim@hub.com" },
+      { id: "EMP-102", name: "Karim Uddin", email: "karim@hub.com" },
+      { id: "EMP-103", name: "Sumi Akter", email: "sumi@hub.com" }
+    ];
+
+    let routineTasks = sanitizeRoutineTasks(JSON.parse(localStorage.getItem('hub_routine_tasks')));
+
+    function sanitizeRoutineTasks(data) {
+      const defaultData = {
+        morning: [
+          { id: "M1", title: "Morning Vehicle Arrival & Unloading", timeSlot: "07:15 AM - 08:00 AM", assignedEmail: "rahim@hub.com", assignedEmpId: "EMP-101", assignedName: "Rahim Ahmed", priority: "High", status: "Pending", progress: 0, note: "" },
+          { id: "M2", title: "Inbound Parcel Scanning & Sorting", timeSlot: "08:00 AM - 09:15 AM", assignedEmail: "karim@hub.com", assignedEmpId: "EMP-102", assignedName: "Karim Uddin", priority: "High", status: "Working", progress: 40, note: "Vehicle delayed by 10 mins" }
+        ],
+        midday: [
+          { id: "MD1", title: "IMS Ticket Followup & Resolution", timeSlot: "10:30 AM - 12:00 PM", assignedEmail: "sumi@hub.com", assignedEmpId: "EMP-103", assignedName: "Sumi Akter", priority: "Medium", status: "Progress", progress: 60, note: "" }
+        ],
+        evening: [
+          { id: "E1", title: "Rider Return Processing & Reconciliation", timeSlot: "02:00 PM - 03:00 PM", assignedEmail: "karim@hub.com", assignedEmpId: "EMP-102", assignedName: "Karim Uddin", priority: "High", status: "Done", progress: 100, note: "All cash reconciled." }
+        ]
+      };
+
+      if (!data || typeof data !== 'object') return defaultData;
+
+      return {
+        morning: Array.isArray(data.morning) ? data.morning : [],
+        midday: Array.isArray(data.midday) ? data.midday : [],
+        evening: Array.isArray(data.evening) ? data.evening : []
+      };
+    }
+
+    let manualInstructions = JSON.parse(localStorage.getItem('hub_manual_instructions')) || [
+      { id: "inst-1", email: "rahim@hub.com", title: "Audit Bay B Parcel Returns", desc: "Perform physical count on return packages in Bay B and log exceptions.", status: "Pending", created: "10:00 AM" }
+    ];
+
+    let imsTracker = JSON.parse(localStorage.getItem('hub_ims_tracker')) || {
+      "rahim@hub.com": ["IMS-1092", "IMS-1098"],
+      "karim@hub.com": ["IMS-2022"],
+      "sumi@hub.com": []
+    };
+
+    let currentTab = "morning";
+    let currentUserEmail = null;
+    let isAdmin = false;
+
+    document.addEventListener("DOMContentLoaded", () => {
+      setInterval(() => {
+        document.getElementById("liveClock").innerText = new Date().toLocaleString();
+      }, 1000);
+
+      renderStaffUI();
+
+      const sessionEmail = localStorage.getItem('logged_user_email');
+      if (sessionEmail) {
+        authenticateUser(sessionEmail);
+      }
+    });
+
+    function handleLoginSubmit(e) {
+      e.preventDefault();
+      const emailInput = document.getElementById("loginEmailInput").value.trim().toLowerCase();
+      if (emailInput) authenticateUser(emailInput);
+    }
+
+    function authenticateUser(email) {
+      currentUserEmail = email.toLowerCase();
+      isAdmin = (currentUserEmail === ADMIN_EMAIL.toLowerCase());
+
+      localStorage.setItem('logged_user_email', currentUserEmail);
+
+      document.getElementById("loginScreen").classList.add("hidden");
+      document.getElementById("dashboardApp").classList.remove("hidden");
+
+      const userTag = document.getElementById("currentUserTag");
+      userTag.innerHTML = isAdmin ? 
+        `<i class="fa-solid fa-user-shield text-cyan-400 mr-1"></i> Admin: <strong>${currentUserEmail}</strong>` : 
+        `<i class="fa-solid fa-user text-slate-400 mr-1"></i> Employee: <strong>${currentUserEmail}</strong>`;
+
+      document.getElementById("adminControls").classList.toggle("hidden", !isAdmin);
+      document.getElementById("adminTaskMonitorSection").classList.toggle("hidden", !isAdmin);
+
+      document.getElementById("taskViewLabel").innerText = isAdmin ? "Admin View: Managing All Tasks" : `Showing assigned tasks for ${currentUserEmail}`;
+
+      renderImsDashboard();
+      renderAdminTaskMonitor();
+      renderManualInstructions();
+      switchRoutineTab(currentTab);
+    }
+
+    function handleLogout() {
+      localStorage.removeItem('logged_user_email');
+      currentUserEmail = null;
+      isAdmin = false;
+      document.getElementById("dashboardApp").classList.add("hidden");
+      document.getElementById("loginScreen").classList.remove("hidden");
+    }
+
+    function renderImsDashboard() {
+      const tbody = document.getElementById("imsDashboardTableBody");
+      let totalTickets = 0;
+      let compliantCount = 0;
+      let nonCompliantCount = 0;
+
+      let rows = staffMembers.map(staff => {
+        const userTickets = imsTracker[staff.email] || [];
+        totalTickets += userTickets.length;
+
+        const isMet = userTickets.length >= 2;
+        if (isMet) compliantCount++; else nonCompliantCount++;
+
+        const ticket1 = userTickets[0] || '—';
+        const ticket2 = userTickets[1] || '—';
+
+        return `
+          <tr>
+            <td class="p-2.5 font-semibold text-slate-100">${staff.name}</td>
+            <td class="p-2.5 text-slate-400 font-mono text-[11px]">${staff.email}</td>
+            <td class="p-2.5"><span class="bg-slate-900 border border-slate-800 text-cyan-300 font-mono px-2 py-0.5 rounded text-[11px]">${ticket1}</span></td>
+            <td class="p-2.5"><span class="bg-slate-900 border border-slate-800 text-cyan-300 font-mono px-2 py-0.5 rounded text-[11px]">${ticket2}</span></td>
+            <td class="p-2.5 font-bold text-slate-200">${userTickets.length} Logged</td>
+            <td class="p-2.5 text-right">
+              <span class="px-2 py-0.5 rounded-full font-bold text-[10px] ${isMet ? 'bg-emerald-950 text-emerald-400 border border-emerald-800' : 'bg-rose-950 text-rose-400 border border-rose-800'}">
+                ${isMet ? '✓ Mandatory Met (≥2)' : '⚠️ Pending Mandatory (&lt;2)'}
+              </span>
+            </td>
+          </tr>
+        `;
+      });
+
+      tbody.innerHTML = rows.join('');
+      document.getElementById("totalImsCount").innerText = totalTickets;
+      document.getElementById("compliantStaffCount").innerText = compliantCount;
+      document.getElementById("nonCompliantStaffCount").innerText = nonCompliantCount;
+    }
+
+    function handleImsUpdate(e) {
+      e.preventDefault();
+      const t1 = document.getElementById("imsTicket1").value.trim();
+      const t2 = document.getElementById("imsTicket2").value.trim();
+
+      if (t1 && t2) {
+        imsTracker[currentUserEmail] = [t1, t2];
+        localStorage.setItem('hub_ims_tracker', JSON.stringify(imsTracker));
+        renderImsDashboard();
+        closeModal("imsUpdateModal");
+        alert("Mandatory IMS Tickets logged successfully!");
+      }
+    }
+
+    function downloadExcelTemplate() {
+      const templateData = [
+        { Slot: "morning", Title: "Inbound Vehicle Unloading", TimeSlot: "07:15 AM - 08:00 AM", Email: "rahim@hub.com", Priority: "High", IMSTicket1: "IMS-9901", IMSTicket2: "IMS-9902" },
+        { Slot: "midday", Title: "Returns Bay Audit", TimeSlot: "11:00 AM - 12:00 PM", Email: "sumi@hub.com", Priority: "Medium", IMSTicket1: "IMS-9903", IMSTicket2: "" },
+        { Slot: "evening", Title: "Cash & Parcel Reconciliation", TimeSlot: "04:00 PM - 05:00 PM", Email: "karim@hub.com", Priority: "High", IMSTicket1: "", IMSTicket2: "" }
+      ];
+
+      const worksheet = XLSX.utils.json_to_sheet(templateData);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, "TasksTemplate");
+      XLSX.writeFile(workbook, "Hub_Operational_Tasks_Template.xlsx");
+    }
+
+    // EXCEL IMPORT ENGINE WITH ARRAY SAFETY
+    function handleExcelImport(e) {
+      e.preventDefault();
+      const fileInput = document.getElementById("excelFileInput");
+      const file = fileInput.files[0];
+
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = function(evt) {
+        try {
+          const data = new Uint8Array(evt.target.result);
+          const workbook = XLSX.read(data, { type: 'array' });
+          const firstSheetName = workbook.SheetNames[0];
+          const worksheet = workbook.Sheets[firstSheetName];
+          const rawRows = XLSX.utils.sheet_to_json(worksheet, { defval: "" });
+
+          if (!rawRows || rawRows.length === 0) {
+            alert("The uploaded Excel file contains no readable data rows.");
+            return;
+          }
+
+          let addedCount = 0;
+          rawRows.forEach(row => {
+            const getVal = (keys) => {
+              for (const k of Object.keys(row)) {
+                const cleanKey = k.toLowerCase().replace(/[\s_]/g, "");
+                if (keys.map(x => x.toLowerCase().replace(/[\s_]/g, "")).includes(cleanKey)) {
+                  return String(row[k]).trim();
+                }
+              }
+              return "";
+            };
+
+            const rawSlot = getVal(["Slot", "Shift"]).toLowerCase();
+            const slot = (rawSlot.includes("mid") || rawSlot.includes("day")) ? "midday" :
+                         (rawSlot.includes("eve") || rawSlot.includes("night")) ? "evening" : "morning";
+
+            const title = getVal(["Title", "Task", "TaskTitle", "Name"]) || "Unnamed Operational Task";
+            const timeSlot = getVal(["TimeSlot", "Time", "ShiftTime"]) || "09:00 AM - 10:00 AM";
+            const email = (getVal(["Email", "Assignee", "AssignedTo"]) || currentUserEmail).toLowerCase();
+            const priority = getVal(["Priority"]) || "Medium";
+
+            let staffObj = staffMembers.find(s => s.email.toLowerCase() === email);
+            if (!staffObj) {
+              staffObj = { id: "EMP-" + Math.floor(100 + Math.random() * 900), name: email.split('@')[0], email: email };
+              staffMembers.push(staffObj);
+            }
+
+            const ims1 = getVal(["IMSTicket1", "IMS1", "Ticket1"]);
+            const ims2 = getVal(["IMSTicket2", "IMS2", "Ticket2"]);
+            if (ims1 || ims2) {
+              const existing = imsTracker[email] || [];
+              const combined = [...new Set([...existing, ims1, ims2].filter(Boolean))];
+              imsTracker[email] = combined;
+            }
+
+            if (!Array.isArray(routineTasks[slot])) {
+              routineTasks[slot] = [];
+            }
+
+            routineTasks[slot].push({
+              id: "EXCEL-" + Date.now() + "-" + Math.floor(Math.random() * 1000),
+              title: title,
+              timeSlot: timeSlot,
+              priority: priority,
+              assignedEmail: staffObj.email,
+              assignedEmpId: staffObj.id,
+              assignedName: staffObj.name,
+              status: "Pending",
+              progress: 0,
+              note: ""
+            });
+
+            addedCount++;
+          });
+
+          localStorage.setItem('hub_routine_tasks', JSON.stringify(routineTasks));
+          localStorage.setItem('hub_staff', JSON.stringify(staffMembers));
+          localStorage.setItem('hub_ims_tracker', JSON.stringify(imsTracker));
+
+          renderStaffUI();
+          renderImsDashboard();
+          renderAdminTaskMonitor();
+          
+          const filterSelect = document.getElementById("staffFilterSelect");
+          if (filterSelect) filterSelect.value = "ALL";
+
+          switchRoutineTab(currentTab);
+          closeModal("excelUploadModal");
+          fileInput.value = "";
+          alert(`Successfully imported ${addedCount} tasks from Excel!`);
+
+        } catch (err) {
+          console.error(err);
+          alert("Error parsing Excel file: " + err.message);
+        }
+      };
+
+      reader.readAsArrayBuffer(file);
+    }
+
+    function updateTaskStatus(slot, taskId, newStatus) {
+      if (!Array.isArray(routineTasks[slot])) routineTasks[slot] = [];
+      const task = routineTasks[slot].find(t => t.id === taskId);
+      if (!task) return;
+
+      const userImsCount = (imsTracker[task.assignedEmail] || []).length;
+
+      if (newStatus === "Done" && userImsCount < 2) {
+        alert(`Mandatory Rule Violation: ${task.assignedName} must log at least 2 IMS Tickets before marking a task as "Done"! Please log tickets in the IMS Dashboard.`);
+        renderTasks(slot);
+        return;
+      }
+
+      task.status = newStatus;
+      if (newStatus === "Done") task.progress = 100;
+      localStorage.setItem('hub_routine_tasks', JSON.stringify(routineTasks));
+      renderTasks(slot);
+      renderAdminTaskMonitor();
+    }
+
+    function updateIndividualTaskProgress(slot, taskId, val) {
+      if (!Array.isArray(routineTasks[slot])) return;
+      const task = routineTasks[slot].find(t => t.id === taskId);
+      if (task) {
+        task.progress = parseInt(val);
+        if (task.progress === 100) {
+          const userImsCount = (imsTracker[task.assignedEmail] || []).length;
+          if (userImsCount < 2) {
+            alert(`Mandatory Rule Violation: Log at least 2 IMS Tickets in the dashboard to set progress to 100%!`);
+            task.progress = 90;
+          } else {
+            task.status = "Done";
+          }
+        }
+        localStorage.setItem('hub_routine_tasks', JSON.stringify(routineTasks));
+        renderTasks(slot);
+        renderAdminTaskMonitor();
+      }
+    }
+
+    function renderAdminTaskMonitor() {
+      if (!isAdmin) return;
+      const tbody = document.getElementById("adminTaskMonitorBody");
+      let allRows = [];
+
+      ['morning', 'midday', 'evening'].forEach(slot => {
+        const tasksArr = Array.isArray(routineTasks[slot]) ? routineTasks[slot] : [];
+        tasksArr.forEach(t => {
+          const status = t.status || "Pending";
+          let badgeColor = "bg-slate-800 text-slate-300";
+          if (status === "Working") badgeColor = "bg-amber-950 text-amber-300 border border-amber-800";
+          if (status === "Progress") badgeColor = "bg-blue-950 text-blue-300 border border-blue-800";
+          if (status === "Done") badgeColor = "bg-emerald-950 text-emerald-300 border border-emerald-800";
+
+          allRows.push(`
+            <tr>
+              <td class="p-2.5 font-bold uppercase text-cyan-400">${slot} (${t.timeSlot})</td>
+              <td class="p-2.5 font-semibold text-slate-100">${t.title}</td>
+              <td class="p-2.5">${t.assignedName} <span class="text-slate-500">(${t.assignedEmail})</span></td>
+              <td class="p-2.5"><span class="px-2 py-0.5 rounded text-[10px] font-bold ${badgeColor}">${status}</span></td>
+              <td class="p-2.5 font-bold text-cyan-400">${t.progress || 0}%</td>
+              <td class="p-2.5 italic text-slate-400">${t.note ? `"${t.note}"` : '—'}</td>
+              <td class="p-2.5 text-right space-x-1">
+                <button onclick="openEditTaskModal('${slot}', '${t.id}')" class="text-[10px] bg-slate-800 hover:bg-slate-700 text-cyan-300 px-2 py-1 rounded border border-slate-700">Reassign</button>
+              </td>
+            </tr>
+          `);
+        });
+      });
+
+      tbody.innerHTML = allRows.length > 0 ? allRows.join('') : `<tr><td colspan="7" class="p-4 text-center text-slate-500">No active operational tasks found.</td></tr>`;
+    }
+
+    function renderTasks(tab) {
+      const container = document.getElementById("routineCardsContainer");
+      const tasks = Array.isArray(routineTasks[tab]) ? routineTasks[tab] : [];
+
+      let filteredTasks = tasks;
+      if (!isAdmin) {
+        filteredTasks = tasks.filter(t => t.assignedEmail.toLowerCase() === currentUserEmail);
+      }
+
+      if (filteredTasks.length === 0) {
+        container.innerHTML = `<div class="col-span-full text-center text-slate-500 py-8 text-xs">No tasks scheduled for you in this routine window.</div>`;
+        return;
+      }
+
+      container.innerHTML = filteredTasks.map(t => {
+        const isAssignedToMe = t.assignedEmail.toLowerCase() === currentUserEmail;
+        const taskStatus = t.status || "Pending";
+        const taskNote = t.note || "";
+        const progressVal = t.progress || 0;
+
+        let statusBadgeClass = "bg-slate-800 text-slate-300 border-slate-700";
+        if (taskStatus === "Working") statusBadgeClass = "bg-amber-950 text-amber-300 border-amber-800";
+        if (taskStatus === "Progress") statusBadgeClass = "bg-blue-950 text-blue-300 border-blue-800";
+        if (taskStatus === "Done") statusBadgeClass = "bg-emerald-950 text-emerald-300 border border-emerald-800";
+
+        return `
+          <div class="glass-card rounded-xl p-4 border border-slate-800 task-card space-y-3">
+            <div class="flex justify-between items-center">
+              <span class="text-[10px] bg-slate-900 text-cyan-300 px-2 py-0.5 rounded font-mono">${t.timeSlot}</span>
+              <span class="text-[10px] font-bold ${t.priority === 'High' ? 'text-rose-400' : 'text-amber-400'}">${t.priority} Priority</span>
+            </div>
+
+            <div>
+              <h4 class="text-sm font-bold text-slate-100">${t.title}</h4>
+              <div class="mt-2 p-2 bg-slate-900/80 rounded border border-slate-800/80 text-xs flex justify-between items-center">
+                <div>
+                  <span class="text-slate-400 block text-[10px]">Assigned Employee</span>
+                  <span class="text-cyan-300 font-medium">${t.assignedName}</span>
+                  <span class="text-slate-500 text-[11px]">(${t.assignedEmpId})</span>
+                </div>
+                <div>
+                  ${(isAssignedToMe || isAdmin) ? `
+                    <select onchange="updateTaskStatus('${tab}', '${t.id}', this.value)" class="text-[11px] bg-slate-950 border border-slate-700 text-slate-200 rounded px-2 py-1 font-bold cursor-pointer">
+                      <option value="Pending" ${taskStatus === 'Pending' ? 'selected' : ''}>⏳ Pending</option>
+                      <option value="Working" ${taskStatus === 'Working' ? 'selected' : ''}>⚙️ Working</option>
+                      <option value="Progress" ${taskStatus === 'Progress' ? 'selected' : ''}>📈 Progress</option>
+                      <option value="Done" ${taskStatus === 'Done' ? 'selected' : ''}>✅ Done</option>
+                    </select>
+                  ` : `
+                    <span class="text-[10px] px-2 py-1 rounded font-bold border ${statusBadgeClass}">${taskStatus}</span>
+                  `}
+                </div>
+              </div>
+            </div>
+
+            <!-- TASK-ATTACHED PROGRESS SLIDER -->
+            <div class="p-2.5 bg-slate-950/70 rounded-xl border border-slate-800/90 space-y-1.5">
+              <div class="flex justify-between text-[11px] text-slate-300">
+                <span class="font-semibold text-slate-400"><i class="fa-solid fa-list-check text-cyan-400 mr-1"></i> Task Progress:</span>
+                <span class="font-bold text-cyan-400">${progressVal}%</span>
+              </div>
+              <div class="w-full bg-slate-900 rounded-full h-1.5 overflow-hidden">
+                <div class="bg-gradient-to-r from-cyan-500 to-blue-500 h-1.5 rounded-full" style="width: ${progressVal}%"></div>
+              </div>
+              <input type="range" min="0" max="100" step="10" value="${progressVal}" onchange="updateIndividualTaskProgress('${tab}', '${t.id}', this.value)" class="w-full accent-cyan-500 cursor-pointer" ${(!isAssignedToMe && !isAdmin) ? 'disabled' : ''}>
+            </div>
+
+            <div class="p-2 bg-slate-950/60 rounded border border-slate-800/60 text-xs">
+              <div class="flex justify-between items-center mb-1">
+                <span class="text-[10px] text-slate-400 font-semibold"><i class="fa-solid fa-comment-dots text-cyan-400 mr-1"></i> Shared Task Note:</span>
+                ${(isAssignedToMe || isAdmin) ? `<button onclick="openTaskNoteModal('${tab}', '${t.id}', '${encodeURIComponent(taskNote)}')" class="text-[10px] text-cyan-400 hover:underline">Edit Note</button>` : ''}
+              </div>
+              <p class="text-[11px] text-slate-300 italic">${taskNote ? `"${taskNote}"` : '<span class="text-slate-600">No notes attached</span>'}</p>
+            </div>
+
+            <div class="pt-2 border-t border-slate-800 flex justify-between items-center">
+              <span class="text-[11px] text-emerald-400"><i class="fa-solid fa-circle-check"></i> Active</span>
+              ${isAdmin ? `
+                <div class="flex items-center gap-1">
+                  <button onclick="openEditTaskModal('${tab}', '${t.id}')" class="text-xs bg-slate-800 hover:bg-slate-700 text-cyan-300 px-2 py-1 rounded border border-slate-700"><i class="fa-solid fa-user-pen"></i> Edit / Reassign</button>
+                  <button onclick="handleDeleteTask('${tab}', '${t.id}')" class="text-xs bg-rose-950 hover:bg-rose-900 text-rose-300 px-2 py-1 rounded border border-rose-800"><i class="fa-solid fa-trash"></i></button>
+                </div>
+              ` : `<span class="text-[11px] text-slate-500 font-medium">Assigned to you</span>`}
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function filterTasksByStaff(selectedStaff) {
+      if (!isAdmin) return;
+      
+      const container = document.getElementById("routineCardsContainer");
+      const tasks = Array.isArray(routineTasks[currentTab]) ? routineTasks[currentTab] : [];
+
+      let filtered = tasks;
+      if (selectedStaff !== "ALL") {
+        filtered = tasks.filter(t => t.assignedEmail.toLowerCase() === selectedStaff.toLowerCase() || t.assignedEmpId.toLowerCase() === selectedStaff.toLowerCase());
+      }
+
+      if (filtered.length === 0) {
+        container.innerHTML = `<div class="col-span-full text-center text-slate-500 py-8 text-xs">No tasks match this filter.</div>`;
+        return;
+      }
+
+      renderTasks(currentTab);
+    }
+
+    function openTaskNoteModal(slot, taskId, currentNote) {
+      document.getElementById("noteSlot").value = slot;
+      document.getElementById("noteTaskId").value = taskId;
+      document.getElementById("taskNoteText").value = decodeURIComponent(currentNote);
+      openModal("taskNoteModal");
+    }
+
+    function handleSaveTaskNote(e) {
+      e.preventDefault();
+      const slot = document.getElementById("noteSlot").value;
+      const taskId = document.getElementById("noteTaskId").value;
+      const noteText = document.getElementById("taskNoteText").value.trim();
+
+      if (!Array.isArray(routineTasks[slot])) routineTasks[slot] = [];
+      const task = routineTasks[slot].find(t => t.id === taskId);
+      if (task) {
+        task.note = noteText;
+        localStorage.setItem('hub_routine_tasks', JSON.stringify(routineTasks));
+        renderTasks(slot);
+        renderAdminTaskMonitor();
+        closeModal("taskNoteModal");
+      }
+    }
+
+    function handleSaveTask(e) {
+      e.preventDefault();
+      
+      const editId = document.getElementById("editTaskId").value;
+      const shiftSlot = document.getElementById("taskShiftSlot").value;
+      const title = document.getElementById("taskTitleInput").value.trim();
+      const timeSlot = document.getElementById("taskTimeSlotInput").value.trim();
+      const staffEmail = document.getElementById("taskAssigneeSelect").value;
+      const priority = document.getElementById("taskPrioritySelect").value;
+
+      let staffObj = staffMembers.find(s => s.email.toLowerCase() === staffEmail.toLowerCase());
+      if (!staffObj) {
+        staffObj = { id: "EMP-DEF", name: staffEmail.split('@')[0], email: staffEmail };
+      }
+
+      let existingStatus = "Pending";
+      let existingProgress = 0;
+      let existingNote = "";
+
+      if (editId) {
+        ['morning', 'midday', 'evening'].forEach(slot => {
+          if (Array.isArray(routineTasks[slot])) {
+            const old = routineTasks[slot].find(t => t.id === editId);
+            if (old) {
+              existingStatus = old.status || "Pending";
+              existingProgress = old.progress || 0;
+              existingNote = old.note || "";
+            }
+            routineTasks[slot] = routineTasks[slot].filter(t => t.id !== editId);
+          }
+        });
+      }
+
+      const taskData = {
+        id: editId || ("TASK-" + Date.now()),
+        title: title,
+        timeSlot: timeSlot,
+        priority: priority,
+        assignedEmail: staffObj.email,
+        assignedEmpId: staffObj.id,
+        assignedName: staffObj.name,
+        status: existingStatus,
+        progress: existingProgress,
+        note: existingNote
+      };
+
+      if (!Array.isArray(routineTasks[shiftSlot])) {
+        routineTasks[shiftSlot] = [];
+      }
+      
+      routineTasks[shiftSlot].push(taskData);
+
+      localStorage.setItem('hub_routine_tasks', JSON.stringify(routineTasks));
+      
+      const filterSelect = document.getElementById("staffFilterSelect");
+      if (filterSelect) filterSelect.value = "ALL";
+
+      closeModal("addNewTaskModal");
+      document.getElementById("taskForm").reset();
+      renderAdminTaskMonitor();
+      switchRoutineTab(shiftSlot);
+    }
+
+    function openAddNewTaskModal() {
+      document.getElementById("editTaskId").value = "";
+      document.getElementById("taskForm").reset();
+      document.getElementById("taskModalHeader").innerText = "Create Operational Task";
+      document.getElementById("taskShiftSlot").value = currentTab;
+      openModal("addNewTaskModal");
+    }
+
+    function openEditTaskModal(shiftSlot, taskId) {
+      if (!Array.isArray(routineTasks[shiftSlot])) return;
+      const task = routineTasks[shiftSlot].find(t => t.id === taskId);
+      if (!task) return;
+
+      document.getElementById("editTaskId").value = task.id;
+      document.getElementById("taskShiftSlot").value = shiftSlot;
+      document.getElementById("taskTitleInput").value = task.title;
+      document.getElementById("taskTimeSlotInput").value = task.timeSlot;
+      document.getElementById("taskAssigneeSelect").value = task.assignedEmail;
+      document.getElementById("taskPrioritySelect").value = task.priority;
+      document.getElementById("taskModalHeader").innerText = "Edit & Reassign Task";
+
+      openModal("addNewTaskModal");
+    }
+
+    function handleDeleteTask(shiftSlot, taskId) {
+      if (confirm("Are you sure you want to delete this task?")) {
+        if (Array.isArray(routineTasks[shiftSlot])) {
+          routineTasks[shiftSlot] = routineTasks[shiftSlot].filter(t => t.id !== taskId);
+        }
+        localStorage.setItem('hub_routine_tasks', JSON.stringify(routineTasks));
+        renderAdminTaskMonitor();
+        switchRoutineTab(shiftSlot);
+      }
+    }
+
+    function handleCreateManualInstruction(e) {
+      e.preventDefault();
+      const email = document.getElementById("manualTargetStaff").value;
+      const title = document.getElementById("manualWorkTitle").value.trim();
+      const desc = document.getElementById("manualWorkDesc").value.trim();
+
+      manualInstructions.push({
+        id: "inst-" + Date.now(),
+        email: email,
+        title: title,
+        desc: desc,
+        status: "Pending",
+        created: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      });
+
+      localStorage.setItem('hub_manual_instructions', JSON.stringify(manualInstructions));
+      renderManualInstructions();
+      closeModal("manualWorkModal");
+      e.target.reset();
+    }
+
+    function toggleManualStatus(id) {
+      const item = manualInstructions.find(i => i.id === id);
+      if (item) {
+        item.status = item.status === "Completed" ? "Pending" : "Completed";
+        localStorage.setItem('hub_manual_instructions', JSON.stringify(manualInstructions));
+        renderManualInstructions();
+      }
+    }
+
+    function renderManualInstructions() {
+      const container = document.getElementById("manualInstructionsContainer");
+      
+      let filtered = manualInstructions;
+      if (!isAdmin) {
+        filtered = manualInstructions.filter(i => i.email.toLowerCase() === currentUserEmail);
+      }
+
+      if (filtered.length === 0) {
+        container.innerHTML = `<div class="col-span-full text-slate-500 text-xs py-3 text-center">No active custom instructions found.</div>`;
+        return;
+      }
+
+      container.innerHTML = filtered.map(item => `
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-3.5 flex justify-between items-start gap-3">
+          <div class="space-y-1">
+            <div class="flex items-center gap-2">
+              <span class="text-xs font-bold text-slate-100">${item.title}</span>
+              <span class="text-[10px] ${item.status === 'Completed' ? 'bg-emerald-950 text-emerald-400' : 'bg-amber-950 text-amber-400'} px-2 py-0.5 rounded font-bold">${item.status}</span>
+            </div>
+            <p class="text-xs text-slate-300">${item.desc}</p>
+            <p class="text-[10px] text-slate-500">Assigned to: <strong class="text-slate-400">${item.email}</strong> • ${item.created}</p>
+          </div>
+          ${(currentUserEmail === item.email.toLowerCase() || isAdmin) ? `
+            <button onclick="toggleManualStatus('${item.id}')" class="text-xs bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 px-2.5 py-1.5 rounded flex-shrink-0">
+              ${item.status === 'Completed' ? 'Mark Pending' : 'Mark Done'}
+            </button>
+          ` : ''}
+        </div>
+      `).join('');
+    }
+
+    function renderStaffUI() {
+      localStorage.setItem('hub_staff', JSON.stringify(staffMembers));
+      
+      const filterSelect = document.getElementById("staffFilterSelect");
+      const taskAssigneeSelect = document.getElementById("taskAssigneeSelect");
+      const manualSelect = document.getElementById("manualTargetStaff");
+      
+      const options = staffMembers.map(s => `<option value="${s.email}">${s.name} (${s.id})</option>`).join('');
+      filterSelect.innerHTML = `<option value="ALL">👤 View All Assigned Staff</option>` + options;
+      taskAssigneeSelect.innerHTML = options;
+      manualSelect.innerHTML = options;
+
+      const tbody = document.getElementById("staffTableBody");
+      tbody.innerHTML = staffMembers.map(s => `
+        <tr>
+          <td class="p-2.5 font-mono text-cyan-400 font-semibold">${s.id}</td>
+          <td class="p-2.5 font-medium text-slate-200">${s.name}</td>
+          <td class="p-2.5 text-slate-400">${s.email}</td>
+          <td class="p-2.5 text-right">
+            <button onclick="handleRemoveEmployee('${s.id}')" class="text-rose-400 hover:text-rose-300 font-bold px-2 py-1"><i class="fa-solid fa-trash-can"></i></button>
+          </td>
+        </tr>
+      `).join('');
+    }
+
+    function handleAddEmployee(e) {
+      e.preventDefault();
+      const id = document.getElementById("newEmpId").value.trim();
+      const name = document.getElementById("newEmpName").value.trim();
+      const email = document.getElementById("newEmpEmail").value.trim();
+
+      if (staffMembers.some(s => s.id === id || s.email === email)) {
+        alert("Employee ID or Email already exists!");
+        return;
+      }
+
+      staffMembers.push({ id, name, email });
+      renderStaffUI();
+      renderImsDashboard();
+      e.target.reset();
+    }
+
+    function handleRemoveEmployee(id) {
+      if (confirm(`Remove employee ${id}?`)) {
+        staffMembers = staffMembers.filter(s => s.id !== id);
+        renderStaffUI();
+        renderImsDashboard();
+      }
+    }
+
+    function switchRoutineTab(tab) {
+      currentTab = tab;
+      document.querySelectorAll('.routine-tab').forEach(b => {
+        b.classList.remove('bg-cyan-600', 'text-white');
+        b.classList.add('bg-slate-800', 'text-slate-400');
+      });
+      document.getElementById(`tab-${tab}`).classList.add('bg-cyan-600', 'text-white');
+
+      renderTasks(tab);
+
+      if (isAdmin) {
+        filterTasksByStaff(document.getElementById("staffFilterSelect").value);
+      }
+    }
+
+    function openModal(id) { document.getElementById(id)?.classList.remove('hidden'); }
+    function closeModal(id) { document.getElementById(id)?.classList.add('hidden'); }
+  </script>
+</body>
+</html>
